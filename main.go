@@ -1,189 +1,182 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/apognu/gocal"
-	"github.com/fatih/color"
-	"math"
+	"github.com/urfave/cli/v2"
+	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
 )
 
-var now = time.Now()
+const DefaultFormatName = "default"
 
-func split(s string, at int) (string, string) {
-	if len(s) <= at {
-		return s, ""
-	}
-	return s[:at], s[at:]
+type FormatContext struct {
+	event     *gocal.Event
+	isCurrent bool
 }
 
-func formatDuration(d time.Duration) string {
-	s := d.String()
-	if strings.Contains(s, ".") {
-		s = s[:strings.Index(s, ".")] + "s"
+type FormatFun func(ctx *FormatContext) []string
+
+var (
+	now        = time.Now()
+	formatters = map[string]FormatFun{
+		DefaultFormatName: formatDefault,
+		"simple":          formatSimple,
 	}
-	if strings.HasPrefix(s, "0h") {
-		s = s[2:]
-	}
-	s = strings.ReplaceAll(s, "h0m", "h")
-	s = strings.ReplaceAll(s, "m0s", "m")
-	return s
-}
+)
 
-type FormatFun func(event *gocal.Event, isCurrent bool) []string
-
-func formatFancy(e *gocal.Event, isCurrent bool) []string {
-	var content []string
-	content = append(content, color.CyanString("|"))
-
-	// print name
-	if isCurrent {
-		content = append(content, ">")
-		content = append(content, color.New(color.FgBlack, color.BgHiMagenta).Sprintf(" %s ", e.Summary))
-	} else {
-		content = append(content, color.BlueString(e.Summary))
-
-		content = append(content, fmt.Sprintf("[%s]",
-			e.End.Sub(*e.Start)))
-	}
-
-	// print time
-	content = append(content, "from")
-	content = append(content, color.YellowString(e.Start.Format("15:04")))
-
-	content = append(content, "to")
-	content = append(content, color.YellowString(e.End.Format("15:04")))
-
-	if isCurrent {
-		// calculate total time in minutes
-		totalMins := e.End.Sub(*e.Start).Minutes()
-		// calculate elapsed time in minutes
-		currentMins := now.Sub(*e.Start).Minutes()
-
-		// progress of the lecture from 0 to 1
-		progress := float32(currentMins) / float32(totalMins)
-
-		progressBarPrompt := formatDuration(now.Sub(*e.Start)) + " / " + formatDuration(e.End.Sub(*e.Start))
-
-		progressBarTotalLength := int(math.Max(20, float64(len(progressBarPrompt))))
-		progressBarCurrentLength := int(progress * float32(progressBarTotalLength))
-		progressBarPromptBefore, progressBarPromptAfter := split(progressBarPrompt, progressBarCurrentLength)
-
-		progressBarColorActive := color.New(color.FgBlack, color.BgHiWhite)
-		content = append(content,
-			progressBarColorActive.Sprintf("[ %s%s",
-				progressBarPromptBefore,
-				strings.Repeat(" ", progressBarCurrentLength-len(progressBarPromptBefore)))+
-				fmt.Sprintf("%s%s ]",
-					progressBarPromptAfter,
-					strings.Repeat(" ", progressBarTotalLength-progressBarCurrentLength-len(progressBarPromptAfter))))
-
-		// show when lecture ends
-		content = append(content, color.GreenString(fmt.Sprintf("(%s remaining)",
-			formatDuration(e.End.Sub(now)))))
-	} else if e.Start.After(now) {
-		// show when lecture starts
-		content = append(content, color.WhiteString(fmt.Sprintf("(in %s)",
-			formatDuration(e.Start.Sub(now)))))
-	} else {
-		// show when the lecture finished
-		content = append(content, color.WhiteString(fmt.Sprintf("(%s ago)",
-			formatDuration(now.Sub(*e.End)))))
-	}
-	return content
-}
-
-func formatShell(e *gocal.Event, isCurrent bool) (content []string) {
-	content = append(content, e.Summary)
-	if isCurrent {
-		content = append(content, fmt.Sprintf("[%s remaining]",
-			formatDuration(e.End.Sub(now))))
-	} else if now.After(*e.End) {
-		content = append(content, fmt.Sprintf("[%s ago]",
-			formatDuration(now.Sub(*e.End))))
-	} else {
-		content = append(content, fmt.Sprintf("[in %s]",
-			formatDuration(e.Start.Sub(now))))
-	}
-	return
+func init() {
+	flag.Parse()
 }
 
 func main() {
+	app := &cli.App{
+		Name:    "today",
+		Usage:   "iCal CLI Viewer",
+		Version: "1.0.0",
+		Authors: []*cli.Author{
+			{
+				Name:  "darmiel",
+				Email: "asdf@qwer.tz",
+			},
+		},
+		UseShortOptionHandling: true,
+		Flags:                  []cli.Flag{},
+		Commands: []*cli.Command{
+			{
+				Name:  "show",
+				Usage: "Default usage",
+				Flags: []cli.Flag{
+					&cli.PathFlag{
+						Name:     "path",
+						Usage:    "Path of the iCal file",
+						Required: true,
+						Aliases:  []string{"p"},
+						EnvVars:  []string{"ICAL_PATH"},
+					},
+					&cli.BoolFlag{
+						Name:  "now",
+						Usage: "Show only active events",
+					},
+					// -f specifies formatter
+					&cli.StringFlag{
+						Name:    "format",
+						Usage:   "Formatter for output",
+						Value:   DefaultFormatName,
+						Aliases: []string{"f"},
+					},
+					&cli.StringFlag{
+						Name:  "join-words",
+						Usage: "Character for joining strings",
+						Value: " ",
+					},
+					&cli.StringFlag{
+						Name:  "join-lines",
+						Usage: "Character for joining lines",
+						Value: "\n",
+					},
+				},
+				Action: func(context *cli.Context) error {
+					var (
+						flagCurrentOnly   = context.Bool("now")
+						flagFormatterName = context.String("format")
+						flagPath          = context.Path("path")
+					)
 
-	var (
-		currentOnly bool
-		formatter   FormatFun
-	)
+					// check if formatter exists
+					var (
+						formatter FormatFun
+						ok        bool
+					)
+					if formatter, ok = formatters[flagFormatterName]; !ok {
+						return fmt.Errorf("cannot find formatter: %s", flagFormatterName)
+					}
 
-	formatters := map[string]FormatFun{
-		"default": formatFancy,
-		"shell":   formatShell,
+					// nowStart marks the start of the current day (at 00:00:00)
+					nowStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+					// nowEnd marks the end of the current day (at 23:59:59)
+					nowEnd := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
+
+					f, err := os.Open(flagPath)
+					if err != nil {
+						panic(err)
+					}
+					defer f.Close()
+
+					calParser := gocal.NewParser(f)
+					calParser.Start, calParser.End = &nowStart, &nowEnd
+					if err := calParser.Parse(); err != nil {
+						panic(err)
+					}
+					type eventPrompt struct {
+						event  *gocal.Event
+						prompt []string
+					}
+
+					var eventPrompts []*eventPrompt
+					for _, e := range calParser.Events {
+						if e.Start == nil || e.End == nil {
+							continue
+						}
+						isCurrent := now.After(*e.Start) && now.Before(*e.End)
+						if flagCurrentOnly && !isCurrent {
+							continue
+						}
+						eventContext := &FormatContext{
+							event:     &e,
+							isCurrent: isCurrent,
+						}
+						eventPrompts = append(eventPrompts, &eventPrompt{
+							event:  &e,
+							prompt: formatter(eventContext),
+						})
+					}
+
+					// sort by starting time
+					sort.Slice(eventPrompts, func(i, j int) bool {
+						return eventPrompts[i].event.Start.Before(*eventPrompts[j].event.End)
+					})
+
+					var prompts []string
+					for _, e := range eventPrompts {
+						prompts = append(prompts, strings.Join(e.prompt, context.String("join-words")))
+					}
+					fmt.Println(strings.Join(prompts, context.String("join-lines")))
+					return nil
+				},
+			},
+			{
+				Name: "list",
+				Subcommands: []*cli.Command{
+					{
+						Name: "format",
+						Action: func(context *cli.Context) error {
+							var keys []string
+							for k := range formatters {
+								keys = append(keys, k)
+							}
+							log.Println("Available formatters:", strings.Join(keys, ", "))
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:  "ralf",
+				Usage: "RALFated commands",
+				Action: func(context *cli.Context) error {
+					panic("To be implemented")
+				},
+			},
+		},
 	}
-
-	if len(os.Args) > 1 {
-		if f, ok := formatters[os.Args[1]]; ok {
-			formatter = f
-		} else {
-			panic("cannot find formatter " + os.Args[1])
-		}
-	} else {
-		formatter = formatters["default"]
-	}
-
-	if len(os.Args) > 2 {
-		currentOnly = os.Args[2] == "current"
-	}
-
-	path, ok := os.LookupEnv("ICAL_PATH")
-	if !ok {
-		panic("ICAL_PATH not set")
-	}
-	// read ical file
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	nowStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	nowEnd := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
-
-	cal := gocal.NewParser(f)
-	cal.Start, cal.End = &nowStart, &nowEnd
-	if err := cal.Parse(); err != nil {
-		panic(err)
-	}
-
-	type event struct {
-		event  *gocal.Event
-		prompt []string
-	}
-	var events []*event
-
-	for _, e := range cal.Events {
-		if e.Start == nil || e.End == nil {
-			fmt.Println("- ", color.BlueString(e.Summary))
-			continue
-		}
-		isCurrent := now.After(*e.Start) && now.Before(*e.End)
-		if currentOnly && !isCurrent {
-			continue
-		}
-		events = append(events, &event{
-			event:  &e,
-			prompt: formatter(&e, isCurrent),
-		})
-	}
-
-	// sort by starting time
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].event.Start.Before(*events[j].event.End)
-	})
-
-	for _, e := range events {
-		fmt.Println(strings.Join(e.prompt, " "))
+	if err := app.Run(os.Args); err != nil {
+		log.Fatalln("Cannot run app:", err)
+		return
 	}
 }
