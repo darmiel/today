@@ -4,7 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"github.com/apognu/gocal"
+	ics "github.com/darmiel/golang-ical"
+	"github.com/ralf-life/engine/actions"
+	"github.com/ralf-life/engine/engine"
+	"github.com/ralf-life/engine/model"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/yaml.v3"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -58,6 +64,10 @@ func main() {
 						Aliases:  []string{"p"},
 						EnvVars:  []string{"ICAL_PATH"},
 					},
+					&cli.PathFlag{
+						Name:  "ralf",
+						Usage: "Path of a RALF model",
+					},
 					&cli.BoolFlag{
 						Name:  "now",
 						Usage: "Show only active events",
@@ -79,12 +89,17 @@ func main() {
 						Usage: "Character for joining lines",
 						Value: "\n",
 					},
+					&cli.BoolFlag{
+						Name:  "verbose",
+						Usage: "Verbose output",
+					},
 				},
 				Action: func(context *cli.Context) error {
 					var (
 						flagCurrentOnly   = context.Bool("now")
 						flagFormatterName = context.String("format")
 						flagPath          = context.Path("path")
+						flagVerbose       = context.Bool("verbose")
 					)
 
 					// check if formatter exists
@@ -102,13 +117,32 @@ func main() {
 					// nowEnd marks the end of the current day (at 23:59:59)
 					nowEnd := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
 
-					f, err := os.Open(flagPath)
-					if err != nil {
-						panic(err)
-					}
-					defer f.Close()
+					var reader io.Reader
 
-					calParser := gocal.NewParser(f)
+					// If RALF engine used, modify calendar
+					if ralfPath := context.Path("ralf"); ralfPath != "" {
+						if r, err := getRALFReader(flagPath, ralfPath, flagVerbose); err != nil {
+							return err
+						} else {
+							if flagVerbose {
+								log.Println("Using RALF-engine for calendar modification")
+							}
+							reader = r
+						}
+					} else {
+						// otherwise use "normal" file
+						if f, err := os.Open(flagPath); err != nil {
+							return err
+						} else {
+							if flagVerbose {
+								fmt.Println("Using normal file open for calendar reading")
+							}
+							reader = f
+							defer f.Close()
+						}
+					}
+
+					calParser := gocal.NewParser(reader)
 					calParser.Start, calParser.End = &nowStart, &nowEnd
 					if err := calParser.Parse(); err != nil {
 						panic(err)
@@ -170,6 +204,7 @@ func main() {
 				Name:  "ralf",
 				Usage: "RALFated commands",
 				Action: func(context *cli.Context) error {
+					// today ralf -f model.yaml
 					panic("To be implemented")
 				},
 			},
@@ -179,4 +214,63 @@ func main() {
 		log.Fatalln("Cannot run app:", err)
 		return
 	}
+}
+
+func getRALFReader(iCalPath, ralfPath string, verbose bool) (io.Reader, error) {
+	rf, err := os.Open(ralfPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rf.Close()
+
+	var profile model.Profile
+	dec := yaml.NewDecoder(rf)
+	dec.KnownFields(true)
+	if err = dec.Decode(&profile); err != nil {
+		return nil, err
+	}
+	cp := engine.ContextFlow{
+		Profile:     &profile,
+		Context:     make(map[string]interface{}),
+		EnableDebug: verbose,
+		Verbose:     verbose,
+	}
+
+	// parse calendar
+	f, err := os.Open(iCalPath)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	cal, err := ics.ParseCalendar(f)
+	if err != nil {
+		return nil, err
+	}
+
+	// get components from calendar (events) and copy to slice for later modifications
+	cc := cal.Components[:]
+
+	// start from behind so we can remove from slice
+	for i := len(cc) - 1; i >= 0; i-- {
+		event, ok := cc[i].(*ics.VEvent)
+		if !ok {
+			continue
+		}
+		var fact actions.ActionMessage
+		if fact, err = cp.RunAllFlows(event, profile.Flows); err != nil {
+			if err == engine.ErrExited {
+				if verbose {
+					log.Println("[RALF] flows exited because of a return statement.")
+				}
+			} else {
+				return nil, err
+			}
+		}
+		switch fact.(type) {
+		case actions.FilterOutMessage:
+			cc = append(cc[:i], cc[i+1:]...) // remove event from components
+		}
+	}
+	cal.Components = cc
+	return strings.NewReader(cal.Serialize()), nil
 }

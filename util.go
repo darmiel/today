@@ -17,10 +17,8 @@ func formatDuration(d time.Duration) string {
 	if strings.Contains(s, ".") {
 		s = s[:strings.Index(s, ".")] + "s"
 	}
-	if strings.HasPrefix(s, "0h") {
-		s = s[2:]
+	if strings.HasSuffix(s, "0s") {
+		s = s[:len(s)-2]
 	}
-	s = strings.ReplaceAll(s, "h0m", "h")
-	s = strings.ReplaceAll(s, "m0s", "m")
 	return s
 }
