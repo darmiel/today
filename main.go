@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/apognu/gocal"
@@ -12,13 +13,20 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
 
-const DefaultFormatName = "default"
+const (
+	DefaultFormatName = "default"
+	// ~/.local/share/today/cache
+	EnvCacheDir = "TODAY_CACHE"
+)
 
 type FormatContext struct {
 	event     *gocal.Event
@@ -34,6 +42,10 @@ var (
 		"simple":          formatSimple,
 	}
 )
+
+var ErrSourceMissing = errors.New("cannot find source")
+var ErrInvalidSource = errors.New("source protocol not supported")
+var ErrCacheNotDir = errors.New("cache must be a directory")
 
 func init() {
 	flag.Parse()
@@ -58,11 +70,10 @@ func main() {
 				Usage: "Default usage",
 				Flags: []cli.Flag{
 					&cli.PathFlag{
-						Name:     "path",
-						Usage:    "Path of the iCal file",
-						Required: true,
-						Aliases:  []string{"p"},
-						EnvVars:  []string{"ICAL_PATH"},
+						Name:    "path",
+						Usage:   "Path of the iCal file",
+						Aliases: []string{"p"},
+						EnvVars: []string{"ICAL_PATH"},
 					},
 					&cli.PathFlag{
 						Name:  "ralf",
@@ -129,7 +140,7 @@ func main() {
 							}
 							reader = r
 						}
-					} else {
+					} else if flagPath != "" {
 						// otherwise use "normal" file
 						if f, err := os.Open(flagPath); err != nil {
 							return err
@@ -140,6 +151,8 @@ func main() {
 							reader = f
 							defer f.Close()
 						}
+					} else {
+						panic("You need to specify a path of the iCal file or use the RALF module.")
 					}
 
 					calParser := gocal.NewParser(reader)
@@ -180,7 +193,6 @@ func main() {
 					for _, e := range eventPrompts {
 						prompts = append(prompts, strings.Join(e.prompt, context.String("join-words")))
 					}
-					fmt.Println(strings.Join(prompts, context.String("join-lines")))
 					return nil
 				},
 			},
@@ -236,13 +248,90 @@ func getRALFReader(iCalPath, ralfPath string, verbose bool) (io.Reader, error) {
 		Verbose:     verbose,
 	}
 
-	// parse calendar
-	f, err := os.Open(iCalPath)
-	if err != nil {
-		panic(err)
+	var r io.Reader
+
+	// iCal source was specified by flag
+	if iCalPath != "" {
+		// parse calendar
+		f, err := os.Open(iCalPath)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		r = f
+	} else if profile.Source != "" {
+		// iCal source was not specify, get from profile (`source`)
+		u, err := url.Parse(profile.Source)
+		if err != nil {
+			return nil, err
+		}
+		switch u.Scheme {
+		case "http", "https":
+			// load iCal file via http
+
+			// temporary directory
+			tempDir, ok := os.LookupEnv(EnvCacheDir)
+			if !ok {
+				tempDir = "~/.local/share/today/cache"
+			}
+			if stat, err := os.Stat(tempDir); os.IsNotExist(err) {
+				if verbose {
+					fmt.Println("creating cache directory at", tempDir)
+				}
+				if err = os.MkdirAll(tempDir, os.ModePerm); err != nil {
+					return nil, err
+				}
+			} else if stat != nil && !stat.IsDir() {
+				return nil, ErrCacheNotDir
+			}
+
+			fileName := filepath.Join(tempDir, filepath.Base(ralfPath)+".cached.ics")
+			var duration time.Duration
+			if int64(profile.CacheDuration) > 0 {
+				duration = time.Duration(profile.CacheDuration)
+			} else {
+				duration = 5 * time.Minute
+			}
+			if stat, err := os.Stat(fileName); os.IsNotExist(err) ||
+				(stat != nil && time.Now().After(stat.ModTime().Add(duration))) {
+				// (re-)download
+				fmt.Println("needing to re-download file")
+				resp, err := http.Get(profile.Source)
+				if err != nil {
+					return nil, err
+				}
+				defer resp.Body.Close()
+				f, err := os.Create(fileName)
+				if err != nil {
+					return nil, err
+				}
+				defer f.Close()
+				if _, err := io.Copy(f, resp.Body); err != nil {
+					return nil, err
+				}
+			}
+			f, err := os.Open(fileName)
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+			r = f
+		case "file":
+			// load iCal file from system
+			f, err := os.Open(u.Path)
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+			r = f
+		default:
+			return nil, ErrInvalidSource
+		}
+	} else {
+		return nil, ErrSourceMissing
 	}
-	defer f.Close()
-	cal, err := ics.ParseCalendar(f)
+
+	cal, err := ics.ParseCalendar(r)
 	if err != nil {
 		return nil, err
 	}
