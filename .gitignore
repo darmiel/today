@@ -1,0 +1,7 @@
+*.yaml
+*.ics
+
+# build output
+/today
+
+/.idea
