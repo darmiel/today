@@ -22,3 +22,10 @@ func formatDuration(d time.Duration) string {
 	}
 	return s
 }
+
+func formatTime(t *time.Time) string {
+	if t == nil {
+		return "{nil}"
+	}
+	return t.Format("02.01.2006 15:04:05")
+}
