@@ -6,3 +6,5 @@
 
 /.idea
 dist/
+
+/release.sh

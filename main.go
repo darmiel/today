@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/apognu/gocal"
@@ -24,13 +25,16 @@ type FormatContext struct {
 	isCurrent bool
 }
 
-type FormatFun func(ctx *FormatContext) []string
+type (
+	FormatFun     func(ctx *FormatContext) ([]string, error)
+	FormatInitFun func() (FormatFun, error)
+)
 
 var (
 	now        = time.Now()
-	formatters = map[string]FormatFun{
-		DefaultFormatName: formatDefault,
-		"simple":          formatSimple,
+	formatters = map[string]FormatInitFun{
+		DefaultFormatName: createDefaultFormatter,
+		"simple":          createSimpleFormatter,
 	}
 )
 
@@ -88,7 +92,6 @@ func main() {
 					&cli.StringFlag{
 						Name:    "format",
 						Usage:   "Formatter for output",
-						Value:   DefaultFormatName,
 						Aliases: []string{"f"},
 					},
 					&cli.StringFlag{
@@ -110,6 +113,10 @@ func main() {
 						Name:  "ralf-verbose",
 						Usage: "Verbose output for RALF flows",
 					},
+					&cli.StringFlag{
+						Name:  "template",
+						Usage: "Custom formatter",
+					},
 				},
 				Action: func(context *cli.Context) error {
 					var (
@@ -121,15 +128,23 @@ func main() {
 						flagRALFPath      = context.Path("ralf")
 						flagStart         = context.Timestamp("time-start")
 						flagEnd           = context.Timestamp("time-end")
+						flagTemplate      = context.String("template")
 					)
 
 					// check if formatter exists
-					var (
-						formatter FormatFun
-						ok        bool
-					)
-					if formatter, ok = formatters[flagFormatterName]; !ok {
-						return fmt.Errorf("cannot find formatter: %s", flagFormatterName)
+					var formatInitFun FormatInitFun
+					if flagTemplate != "" {
+						if flagFormatterName != "" {
+							return errors.New("cannot combine --template and --format")
+						}
+						formatInitFun = createTemplateFormatter(flagTemplate)
+					} else if flagFormatterName != "" {
+						var ok bool
+						if formatInitFun, ok = formatters[flagFormatterName]; !ok {
+							return fmt.Errorf("cannot find formatter: %s", flagFormatterName)
+						}
+					} else {
+						formatInitFun = formatters[DefaultFormatName]
 					}
 
 					var reader io.Reader
@@ -150,11 +165,11 @@ func main() {
 						if err != nil {
 							return err
 						}
+						defer f.Close()
 						if flagVerbose {
 							fmt.Println("Using normal file open for calendar reading")
 						}
 						reader = f
-						defer f.Close()
 					} else {
 						panic("You need to specify a path of the iCal file or use the RALF module.")
 					}
@@ -169,12 +184,19 @@ func main() {
 					if err := calParser.Parse(); err != nil {
 						panic(err)
 					}
+
+					// create formatter from init
+					formatter, err := formatInitFun()
+					if err != nil {
+						return err
+					}
+
 					type eventPrompt struct {
 						event  *gocal.Event
 						prompt []string
 					}
-
 					var eventPrompts []*eventPrompt
+
 					for _, e := range calParser.Events {
 						if e.Start == nil || e.End == nil {
 							continue
@@ -187,9 +209,13 @@ func main() {
 							event:     &e,
 							isCurrent: isCurrent,
 						}
+						prompt, err := formatter(eventContext)
+						if err != nil {
+							return err
+						}
 						eventPrompts = append(eventPrompts, &eventPrompt{
 							event:  &e,
-							prompt: formatter(eventContext),
+							prompt: prompt,
 						})
 					}
 
