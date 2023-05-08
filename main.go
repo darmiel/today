@@ -184,9 +184,6 @@ func main() {
 				return nil
 			}
 
-			flagStart = ref(time.Date(2023, 05, 04, 0, 0, 0, 0, time.Local))
-			flagEnd = ref(time.Date(2023, 05, 04, 23, 0, 0, 0, time.Local))
-
 			// check if formatter exists
 			var formatInitFun func() (interface{}, error)
 			if flagTemplate != "" {
