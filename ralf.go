@@ -33,24 +33,28 @@ func loadFileSourceFromRALFProfile(sourceFilePath string) (io.ReadCloser, error)
 	return os.Open(sourceFilePath)
 }
 
-func loadHTTPSourceFromRALFProfile(definitionPath string, profile *model.Profile, verbose bool) (io.ReadCloser, error) {
+func loadHTTPSourceFromRALFProfile(definitionPath string, profile *model.Profile, verbose bool, cacheDir string) (io.ReadCloser, error) {
 	// temporary directory
-	tempDir, ok := os.LookupEnv(EnvCacheDir)
-	if !ok {
-		tempDir = "~/.local/share/today/cache"
-	}
-	if stat, err := os.Stat(tempDir); os.IsNotExist(err) {
-		if verbose {
-			fmt.Println("creating cache directory at", tempDir)
+	if cacheDir == "" {
+		if home, err := os.UserHomeDir(); err != nil {
+			return nil, fmt.Errorf("cannot get home dir: %v. "+
+				"you can specify the directory using env:RALF_CACHE if the error persists", err)
+		} else {
+			cacheDir = filepath.Join(home, ".local", "share", "today", "ralf-cache")
 		}
-		if err = os.MkdirAll(tempDir, os.ModePerm); err != nil {
-			return nil, fmt.Errorf("cannot create cache directory '%s': %v", tempDir, err)
+	}
+	if stat, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		if verbose {
+			fmt.Println("creating cache directory at", cacheDir)
+		}
+		if err = os.MkdirAll(cacheDir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("cannot create cache directory '%s': %v", cacheDir, err)
 		}
 	} else if stat != nil && !stat.IsDir() {
 		return nil, ErrCacheNotDir
 	}
 
-	fileName := filepath.Join(tempDir, filepath.Base(definitionPath)+".cached.ics")
+	fileName := filepath.Join(cacheDir, filepath.Base(definitionPath)+".cached.ics")
 	var duration time.Duration
 	if int64(profile.CacheDuration) > 0 {
 		duration = time.Duration(profile.CacheDuration)
@@ -92,7 +96,12 @@ func loadHTTPSourceFromRALFProfile(definitionPath string, profile *model.Profile
 	return os.Open(fileName)
 }
 
-func loadSourceFromRALFProfile(definitionPath string, profile *model.Profile, verbose bool) (io.ReadCloser, error) {
+func loadSourceFromRALFProfile(
+	definitionPath string,
+	profile *model.Profile,
+	verbose bool,
+	cacheDir string,
+) (io.ReadCloser, error) {
 	u, err := url.Parse(profile.Source)
 	if err != nil {
 		return nil, err
@@ -100,7 +109,7 @@ func loadSourceFromRALFProfile(definitionPath string, profile *model.Profile, ve
 	switch u.Scheme {
 	case "http", "https":
 		// load iCal file via http
-		return loadHTTPSourceFromRALFProfile(definitionPath, profile, verbose)
+		return loadHTTPSourceFromRALFProfile(definitionPath, profile, verbose, cacheDir)
 	case "file":
 		// load iCal file from system
 		return loadFileSourceFromRALFProfile(u.Path)
@@ -108,7 +117,11 @@ func loadSourceFromRALFProfile(definitionPath string, profile *model.Profile, ve
 	return nil, ErrInvalidSource
 }
 
-func getRALFReader(iCalPath, ralfDefinitionPath string, enableDebug, ralfVerbose, verbose bool) (io.Reader, error) {
+func getRALFReader(
+	iCalPath, ralfDefinitionPath string,
+	enableDebug, ralfVerbose, verbose bool,
+	cacheDir string,
+) (io.Reader, error) {
 	rf, err := os.Open(ralfDefinitionPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open RALF-definition '%s': '%v'", ralfDefinitionPath, err)
@@ -137,7 +150,7 @@ func getRALFReader(iCalPath, ralfDefinitionPath string, enableDebug, ralfVerbose
 			return nil, err
 		}
 	} else if profile.Source != "" {
-		if r, err = loadSourceFromRALFProfile(ralfDefinitionPath, &profile, verbose); err != nil {
+		if r, err = loadSourceFromRALFProfile(ralfDefinitionPath, &profile, verbose, cacheDir); err != nil {
 			return nil, err
 		}
 	} else {

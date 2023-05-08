@@ -63,8 +63,7 @@ brews:
     dependencies:
       - name: git
       - name: go
-    test: |
-      system "true"
+    test: system "#{bin}/today --version"
     install: |
       ENV["GOPATH"] = buildpath
       path = buildpath/"src/github.com/darmiel/today"
