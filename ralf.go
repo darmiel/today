@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	ics "github.com/darmiel/golang-ical"
-	"github.com/ralf-life/engine/actions"
 	"github.com/ralf-life/engine/engine"
 	"github.com/ralf-life/engine/model"
 	"gopkg.in/yaml.v3"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -151,30 +149,8 @@ func getRALFReader(iCalPath, ralfDefinitionPath string, enableDebug, ralfVerbose
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse calendar: %v", err)
 	}
-	// get components from calendar (events) and copy to slice for later modifications
-	cc := cal.Components[:]
-
-	// start from behind so we can remove from slice
-	for i := len(cc) - 1; i >= 0; i-- {
-		event, ok := cc[i].(*ics.VEvent)
-		if !ok {
-			continue
-		}
-		var fact actions.ActionMessage
-		if fact, err = cp.RunAllFlows(event, profile.Flows); err != nil {
-			if err == engine.ErrExited {
-				if verbose {
-					log.Println("[RALF] flows exited because of a return statement.")
-				}
-			} else {
-				return nil, err
-			}
-		}
-		switch fact.(type) {
-		case actions.FilterOutMessage:
-			cc = append(cc[:i], cc[i+1:]...) // remove event from components
-		}
+	if err = engine.ModifyCalendar(&cp, profile.Flows, cal); err != nil {
+		return nil, err
 	}
-	cal.Components = cc
 	return strings.NewReader(cal.Serialize()), nil
 }

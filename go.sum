@@ -88,6 +88,8 @@ github.com/ralf-life/engine v0.0.0-20230425131010-4cf95eafebcb h1:vrF4gva+mTqFR9
 github.com/ralf-life/engine v0.0.0-20230425131010-4cf95eafebcb/go.mod h1:WpUQRwtsrNDbxDXIwdOTYhTcrM64mQm7nVpOV6qM6fc=
 github.com/ralf-life/engine v1.0.1-0.20230427065957-53deb5ed70f0 h1:nAm9neooFTS1wtRtGjZZK2e3cFOj4sxbPTuQaw1fdhQ=
 github.com/ralf-life/engine v1.0.1-0.20230427065957-53deb5ed70f0/go.mod h1:WpUQRwtsrNDbxDXIwdOTYhTcrM64mQm7nVpOV6qM6fc=
+github.com/ralf-life/engine v1.0.1-0.20230504103323-78bc33a57982 h1:NJLDTjd9wnipGHycEMtCtF99sixTwHszTwedu7/WbIo=
+github.com/ralf-life/engine v1.0.1-0.20230504103323-78bc33a57982/go.mod h1:WpUQRwtsrNDbxDXIwdOTYhTcrM64mQm7nVpOV6qM6fc=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.4 h1:8TfxU8dW6PdqD27gjM8MVNuicgxIjxpm4K7x4jp8sis=
 github.com/rivo/uniseg v0.4.4/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
