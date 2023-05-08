@@ -1,4 +1,6 @@
 *.yaml
+!/.goreleaser.yaml
+
 *.ics
 
 # build output
@@ -8,3 +10,5 @@
 dist/
 
 /release.sh
+
+dist/
