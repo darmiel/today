@@ -43,7 +43,7 @@ func main() {
 	app := &cli.App{
 		Name:    "today",
 		Usage:   "iCal CLI Viewer",
-		Version: "1.4.0",
+		Version: "1.4.1",
 		Authors: []*cli.Author{
 			{
 				Name:  "darmiel",
