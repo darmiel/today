@@ -89,8 +89,8 @@ func createTemplateContext(tpl string, ctx *FormatContext) *templateContext {
 	}
 }
 
-func createTemplateFormatter(tpl string) FormatInitFun {
-	return func() (FormatFun, error) {
+func createTemplateFormatter(tpl string) func() (interface{}, error) {
+	return func() (interface{}, error) {
 		t, err := template.New("main").Parse(tpl)
 		if err != nil {
 			return nil, err

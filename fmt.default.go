@@ -5,7 +5,7 @@ import (
 	"github.com/fatih/color"
 )
 
-func createDefaultFormatter() (FormatFun, error) {
+func createDefaultFormatter() (interface{}, error) {
 	return func(ctx *FormatContext) ([]string, error) {
 		e := ctx.event
 		var content []string

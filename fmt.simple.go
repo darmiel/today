@@ -1,5 +1,5 @@
 package main
 
-func createSimpleFormatter() (FormatFun, error) {
+func createSimpleFormatter() (interface{}, error) {
 	return createTemplateFormatter("{{ .Event.Summary }} [{{ .Relative }}]")()
 }

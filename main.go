@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/apognu/gocal"
@@ -22,16 +23,12 @@ type FormatContext struct {
 	isCurrent bool
 }
 
-type (
-	FormatFun     func(ctx *FormatContext) ([]string, error)
-	FormatInitFun func() (FormatFun, error)
-)
-
 var (
 	now        = time.Now()
-	formatters = map[string]FormatInitFun{
+	formatters = map[string]func() (interface{}, error){
 		DefaultFormatName: createDefaultFormatter,
 		"simple":          createSimpleFormatter,
+		"raw":             createRawFormatter,
 	}
 )
 
@@ -46,7 +43,7 @@ func main() {
 	app := &cli.App{
 		Name:    "today",
 		Usage:   "iCal CLI Viewer",
-		Version: "1.3.0",
+		Version: "1.4.0",
 		Authors: []*cli.Author{
 			{
 				Name:  "darmiel",
@@ -147,6 +144,17 @@ func main() {
 				Aliases:  []string{"L"},
 				Category: CategoryOutput,
 			},
+			&cli.PathFlag{
+				Name:     "write-file",
+				Category: CategoryOutput,
+				Usage:    "Write iCal to file",
+			},
+			&cli.BoolFlag{
+				Name:     "write-stdout",
+				Category: CategoryOutput,
+				Usage:    "Write iCal to stdout",
+				Value:    true,
+			},
 		},
 		Action: func(context *cli.Context) error {
 			var (
@@ -163,6 +171,8 @@ func main() {
 				flagVerbose       = context.Bool("verbose")
 				flagTemplate      = context.String("template")
 				flagListFormats   = context.Bool("list-formats")
+				flagWriteFile     = context.Path("write-file")
+				flagWriteStdout   = context.Bool("write-stdout")
 				// RALF
 				flagRALFVerbose = context.Bool("ralf-verbose")
 				flagRALFDebug   = context.Bool("ralf-debug")
@@ -178,7 +188,7 @@ func main() {
 			flagEnd = ref(time.Date(2023, 05, 04, 23, 0, 0, 0, time.Local))
 
 			// check if formatter exists
-			var formatInitFun FormatInitFun
+			var formatInitFun func() (interface{}, error)
 			if flagTemplate != "" {
 				if flagFormatterName != "" {
 					return errors.New("cannot combine --template and --format")
@@ -232,10 +242,15 @@ func main() {
 				fmt.Println("End:", formatTime(flagEnd))
 			}
 
-			calParser := gocal.NewParser(reader)
+			data, err := io.ReadAll(reader)
+			if err != nil {
+				return fmt.Errorf("cannot read calendar source: %v", err)
+			}
+
+			calParser := gocal.NewParser(bytes.NewReader(data))
 			calParser.Start, calParser.End = flagStart, flagEnd
 			if err := calParser.Parse(); err != nil {
-				panic(err)
+				return fmt.Errorf("cannot parse calendar: %v", err)
 			}
 
 			if flagLocal {
@@ -256,45 +271,81 @@ func main() {
 				return err
 			}
 
-			type eventPrompt struct {
-				event  *gocal.Event
-				prompt []string
-			}
-			var eventPrompts []*eventPrompt
+			var lines []string
 
-			for _, e := range calParser.Events {
-				if e.Start == nil || e.End == nil {
-					continue
+			switch f := formatter.(type) {
+			case func(*FormatContext) ([]string, error):
+				type eventPrompt struct {
+					event  *gocal.Event
+					prompt []string
 				}
-				isCurrent := now.After(*e.Start) && now.Before(*e.End)
-				if flagCurrentOnly && !isCurrent {
-					continue
+				var eventPrompts []*eventPrompt
+
+				for _, e := range calParser.Events {
+					if e.Start == nil || e.End == nil {
+						continue
+					}
+					isCurrent := now.After(*e.Start) && now.Before(*e.End)
+					if flagCurrentOnly && !isCurrent {
+						continue
+					}
+					eventContext := &FormatContext{
+						event:     &e,
+						isCurrent: isCurrent,
+					}
+					prompt, err := f(eventContext)
+					if err != nil {
+						return err
+					}
+					eventPrompts = append(eventPrompts, &eventPrompt{
+						event:  &e,
+						prompt: prompt,
+					})
 				}
-				eventContext := &FormatContext{
-					event:     &e,
-					isCurrent: isCurrent,
+
+				// sort by starting time
+				sort.Slice(eventPrompts, func(i, j int) bool {
+					return eventPrompts[i].event.Start.Before(*eventPrompts[j].event.End)
+				})
+
+				for _, e := range eventPrompts {
+					lines = append(lines, strings.Join(e.prompt, context.String("join-words")))
 				}
-				prompt, err := formatter(eventContext)
+
+			case func([]byte) ([]string, error):
+				if lines, err = f(data); err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("formatter %s is not a valid format fun: %T", flagFormatterName, f)
+			}
+
+			var writers []io.Writer
+
+			if flagWriteStdout {
+				if flagVerbose {
+					fmt.Println("Writing to stdout")
+				}
+				writers = append(writers, os.Stdout)
+			}
+
+			if flagWriteFile != "" {
+				if flagVerbose {
+					fmt.Println("Writing to file", flagWriteFile)
+				}
+				f, err := os.Create(flagWriteFile)
 				if err != nil {
 					return err
 				}
-				eventPrompts = append(eventPrompts, &eventPrompt{
-					event:  &e,
-					prompt: prompt,
-				})
+				defer f.Close()
+				writers = append(writers, f)
 			}
 
-			// sort by starting time
-			sort.Slice(eventPrompts, func(i, j int) bool {
-				return eventPrompts[i].event.Start.Before(*eventPrompts[j].event.End)
-			})
-
-			var prompts []string
-			for _, e := range eventPrompts {
-				prompts = append(prompts, strings.Join(e.prompt, context.String("join-words")))
-			}
-			fmt.Println(strings.Join(prompts, context.String("join-lines")))
-			return nil
+			_, err = fmt.Fprintln(
+				io.MultiWriter(writers...),
+				strings.Join(lines, context.String("join-lines")),
+			)
+			return err
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
