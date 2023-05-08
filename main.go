@@ -78,14 +78,14 @@ func main() {
 					&cli.TimestampFlag{
 						Name:   "time-start",
 						Usage:  "Set the start time to show events",
-						Value:  cli.NewTimestamp(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)),
+						Value:  cli.NewTimestamp(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)),
 						Layout: "02.01.2006 15:04:05",
 					},
 					// time-end marks the end of the current day (at 23:59:59)
 					&cli.TimestampFlag{
 						Name:   "time-end",
 						Usage:  "Set the end time to show events",
-						Value:  cli.NewTimestamp(time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)),
+						Value:  cli.NewTimestamp(time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.Local)),
 						Layout: "02.01.2006 15:04:05",
 					},
 					// -f specifies formatter
@@ -117,6 +117,11 @@ func main() {
 						Name:  "template",
 						Usage: "Custom formatter",
 					},
+					&cli.BoolFlag{
+						Name:  "local",
+						Usage: "Convert timestamps to local tz",
+						Value: true,
+					},
 				},
 				Action: func(context *cli.Context) error {
 					var (
@@ -129,7 +134,11 @@ func main() {
 						flagStart         = context.Timestamp("time-start")
 						flagEnd           = context.Timestamp("time-end")
 						flagTemplate      = context.String("template")
+						flagLocal         = context.Bool("local")
 					)
+
+					flagStart = ref(time.Date(2023, 05, 04, 0, 0, 0, 0, time.Local))
+					flagEnd = ref(time.Date(2023, 05, 04, 23, 0, 0, 0, time.Local))
 
 					// check if formatter exists
 					var formatInitFun FormatInitFun
@@ -183,6 +192,18 @@ func main() {
 					calParser.Start, calParser.End = flagStart, flagEnd
 					if err := calParser.Parse(); err != nil {
 						panic(err)
+					}
+
+					if flagLocal {
+						for i, e := range calParser.Events {
+							if e.Start != nil {
+								e.Start = ref(e.Start.Local())
+							}
+							if e.End != nil {
+								e.End = ref(e.End.Local())
+							}
+							calParser.Events[i] = e
+						}
 					}
 
 					// create formatter from init
