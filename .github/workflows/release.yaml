@@ -26,9 +26,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Update Homebrew formula
-        uses: dawidd6/action-homebrew-bump-formula@v3
-        with:
-          token: ${{secrets.TOKEN}}
-          tap: darmiel/today
-          formula: today
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.TOKEN }}
