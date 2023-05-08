@@ -4,6 +4,27 @@ What's in my calendar today? ` 🔵 With Shell Integration ` ` 🔵 With RALF In
 
 <img width="1119" alt="Screenshot 2023-04-20 at 23 47 43" src="https://user-images.githubusercontent.com/71837281/233494732-dbacaf1f-a2fd-4c40-ac0f-3a1c6cd4768b.png">
 
+## Installation
+
+**🍏 Using Brew**
+```bash
+brew install darmiel/today/today
+```
+
+---
+
+**🛠️ Building from source using Go**
+
+```bash
+go install github.com/darmiel/today@latest
+```
+
+---
+
+**📦 Precompiled binaries**
+
+Can be found [here](https://github.com/darmiel/today/releases/latest)
+
 ## Shell Integration
 
 ### Starship
