@@ -106,6 +106,40 @@ flows:
 $ today --ralf definition.yaml --write-file /tmp/calendar.ics --write-stdout='false'
 ```
 
+### Formats
+
+You can show a list of available formats using `-L`.
+
+```bash
+$ today -L
+Available formats: default, simple, raw
+
+$ today -p ... -f simple
+Test Event [1h55m19s remaining]
+```
+
+If the predefined formats don't fit your needs, you can create a custom format by using the `--template`-Flag.
+
+```bash
+$ today -p ... --template '({{ .Relative }}) {{ .Event.Summary }}'
+(1h55m19s remaining) Test Event
+```
+
+Available template context:
+
+```go
+type TemplateContext struct {
+    Event       *gocal.Event
+    Relative    string
+    RelativeRAW string
+    Progress    string
+    Start       *engine.CtxTime
+    End         *engine.CtxTime
+    IsCurrent   bool
+}
+
+```
+
 ## Shell Integration
 
 ### Starship
