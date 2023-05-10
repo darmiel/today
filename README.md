@@ -39,6 +39,8 @@ today --ralf /tmp/definition.yaml
 # NOTE: the path to the definition can also be specified by the `RALF_DEFINITION` environment variable
 ```
 
+> **Note**: You have to specify either `-p` or `--ralf` or both.
+
 ### Options
 
 ```
@@ -78,9 +80,9 @@ RALF
    --ralf-verbose      Verbose output for RALF flows (default: false)
 ```
 
-### today as a proxy
+### Modify Calendar only
 
-You can use `today` to only modify the calendar using the `RALF` integration.
+You can use `today` to modify the calendar using the `RALF` integration.
 
 ```bash
 $ cat definition.yaml
@@ -103,7 +105,7 @@ flows:
         - match: "ove"
           replace: "uv"
 
-$ today --ralf definition.yaml --write-file /tmp/calendar.ics --write-stdout='false'
+$ today --ralf definition.yaml --write-file /tmp/calendar.ics
 ```
 
 ### Formats
