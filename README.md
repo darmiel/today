@@ -25,6 +25,87 @@ go install github.com/darmiel/today@latest
 
 Can be found [here](https://github.com/darmiel/today/releases/latest)
 
+## Usage
+
+```bash
+today [...Options]
+
+# Using .ics file via -p parameter
+today -p /tmp/calendar.ics
+# NOTE: the path to the calendar can also be specified by the `ICAL_PATH` environment variable
+
+# Using a RALF definition via --ralf parameter
+today --ralf /tmp/definition.yaml
+# NOTE: the path to the definition can also be specified by the `RALF_DEFINITION` environment variable
+```
+
+### Options
+
+```
+GLOBAL OPTIONS:
+   --help, -h     show help
+   --version, -v  print the version
+
+CALENDAR
+
+   --local             Convert timestamps to local timezone (default: true)
+   --now               Show only active events (default: false)
+   --time-end value    Set the end time to show events (default: 2023-05-10 23:59:59 +0200 CEST)
+   --time-start value  Set the start time to show events (default: 2023-05-10 00:00:00 +0200 CEST)
+
+INPUT
+
+   --path value, -p value  Path of the iCal file [$ICAL_PATH]
+   --ralf value            Path of a RALF model [$RALF_DEFINITION]
+
+OUTPUT
+
+   --first value             Only output first n events (default: 0)
+   --format value, -f value  Formatter for output
+   --join-lines value        Character for joining lines (default: "\n")
+   --join-words value        Character for joining strings (default: " ")
+   --last value              Only output last n events (default: 0)
+   --list-formats, -L        List available formats (default: false)
+   --template value          Custom formatter
+   --verbose                 Verbose output (default: false)
+   --write-file value        Write iCal to file
+   --write-stdout            Write iCal to stdout (default: true)
+
+RALF
+
+   --ralf-cache value  RALF cache directory [$RALF_CACHE]
+   --ralf-debug        Enable RALF debug messages (default: true)
+   --ralf-verbose      Verbose output for RALF flows (default: false)
+```
+
+### today as a proxy
+
+You can use `today` to only modify the calendar using the `RALF` integration.
+
+```bash
+$ cat definition.yaml
+source: file:///tmp/calendar.ics
+
+flows:
+  - do: actions/regex-replace
+    with:
+      case-sensitive: true
+      in: [ "summary" ]
+      map:
+        - match: "[rl]"
+          replace: "w"
+        - match: "[RL]"
+          replace: "W"
+        - match: "n([aeiou])"
+          replace: "ny$1"
+        - match: "N([aeiouAEIOU])"
+          replace: "Ny$1"
+        - match: "ove"
+          replace: "uv"
+
+$ today --ralf definition.yaml --write-file /tmp/calendar.ics --write-stdout='false'
+```
+
 ## Shell Integration
 
 ### Starship
@@ -33,7 +114,7 @@ Paste the following contents to `~/.config/starship.toml` and modify to your nee
 
 ```toml
 [custom.today]
-command = 'today show --now -p "<path to .ics>" -f simple --join-lines ", "'
+command = 'today --now -p "<path to .ics>" -f simple --join-lines ", "'
 when = true
 style = 'bold green'
 symbol = '📆 '

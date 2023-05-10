@@ -64,6 +64,7 @@ func main() {
 				EnvVars:  []string{"RALF_DEFINITION"},
 				Category: CategoryInput,
 			},
+
 			&cli.BoolFlag{
 				Name:     "now",
 				Usage:    "Show only active events",
@@ -91,6 +92,7 @@ func main() {
 				Value:    true,
 				Category: CategoryCalendarSelection,
 			},
+
 			// -f specifies formatter
 			&cli.StringFlag{
 				Name:     "format",
@@ -121,6 +123,36 @@ func main() {
 				Category: CategoryOutput,
 			},
 			&cli.BoolFlag{
+				Name:     "list-formats",
+				Usage:    "List available formats",
+				Aliases:  []string{"L"},
+				Category: CategoryOutput,
+			},
+			&cli.PathFlag{
+				Name:     "write-file",
+				Category: CategoryOutput,
+				Usage:    "Write iCal to file",
+			},
+			&cli.BoolFlag{
+				Name:     "write-stdout",
+				Category: CategoryOutput,
+				Usage:    "Write iCal to stdout",
+				Value:    true,
+			},
+			&cli.UintFlag{
+				Name:     "first",
+				Category: CategoryOutput,
+				Usage:    "Only output first n events",
+				Value:    0,
+			},
+			&cli.UintFlag{
+				Name:     "last",
+				Category: CategoryOutput,
+				Usage:    "Only output last n events",
+				Value:    0,
+			},
+
+			&cli.BoolFlag{
 				Name:     "ralf-verbose",
 				Usage:    "Verbose output for RALF flows",
 				Category: CategoryRALF,
@@ -137,23 +169,6 @@ func main() {
 				Usage:     "RALF cache directory",
 				EnvVars:   []string{"RALF_CACHE"},
 				TakesFile: false,
-			},
-			&cli.BoolFlag{
-				Name:     "list-formats",
-				Usage:    "List available formats",
-				Aliases:  []string{"L"},
-				Category: CategoryOutput,
-			},
-			&cli.PathFlag{
-				Name:     "write-file",
-				Category: CategoryOutput,
-				Usage:    "Write iCal to file",
-			},
-			&cli.BoolFlag{
-				Name:     "write-stdout",
-				Category: CategoryOutput,
-				Usage:    "Write iCal to stdout",
-				Value:    true,
 			},
 		},
 		Action: func(context *cli.Context) error {
@@ -173,6 +188,8 @@ func main() {
 				flagListFormats   = context.Bool("list-formats")
 				flagWriteFile     = context.Path("write-file")
 				flagWriteStdout   = context.Bool("write-stdout")
+				flagFirst         = context.Uint("first")
+				flagLast          = context.Uint("last")
 				// RALF
 				flagRALFVerbose = context.Bool("ralf-verbose")
 				flagRALFDebug   = context.Bool("ralf-debug")
@@ -305,7 +322,20 @@ func main() {
 					return eventPrompts[i].event.Start.Before(*eventPrompts[j].event.End)
 				})
 
+				var count uint
+
 				for _, e := range eventPrompts {
+					count++
+					if flagFirst > 0 && flagFirst < count {
+						if flagVerbose {
+							fmt.Println("[First] skipped", e)
+						}
+						continue
+					}
+					if flagLast > 0 && flagLast < uint(len(eventPrompts)-int(count)) {
+						fmt.Println("[Last] skipped", e)
+						continue
+					}
 					lines = append(lines, strings.Join(e.prompt, context.String("join-words")))
 				}
 
