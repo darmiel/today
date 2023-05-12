@@ -31,6 +31,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/ralf-life/engine v1.0.1-0.20230504103323-78bc33a57982 h1:NJLDTjd9wnipGHycEMtCtF99sixTwHszTwedu7/WbIo=
 github.com/ralf-life/engine v1.0.1-0.20230504103323-78bc33a57982/go.mod h1:WpUQRwtsrNDbxDXIwdOTYhTcrM64mQm7nVpOV6qM6fc=
+github.com/ralf-life/engine v1.1.1-0.20230512070447-c54199403f6c h1:ipIrolOwDCgoieu5I4NIY6MOBwqkJh+KERabVkkDyJs=
+github.com/ralf-life/engine v1.1.1-0.20230512070447-c54199403f6c/go.mod h1:WpUQRwtsrNDbxDXIwdOTYhTcrM64mQm7nVpOV6qM6fc=
 github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf35Ld67mk=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

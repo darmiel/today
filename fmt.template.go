@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/apognu/gocal"
 	"github.com/fatih/color"
-	"github.com/ralf-life/engine/engine"
+	"github.com/ralf-life/engine/pkg/engine"
 	"html/template"
 	"math"
 	"strings"

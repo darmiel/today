@@ -6,7 +6,7 @@ require (
 	github.com/apognu/gocal v0.9.0
 	github.com/darmiel/golang-ical v0.0.0-20221121153313-bd526fc4018d
 	github.com/fatih/color v1.15.0
-	github.com/ralf-life/engine v1.0.1-0.20230504103323-78bc33a57982
+	github.com/ralf-life/engine v1.1.1-0.20230512070447-c54199403f6c
 	github.com/urfave/cli/v2 v2.25.1
 	gopkg.in/yaml.v3 v3.0.1
 )
