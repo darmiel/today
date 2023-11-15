@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/apognu/gocal"
 	"github.com/fatih/color"
-	"github.com/ralf-life/engine/pkg/engine"
+	"github.com/ralf-life/engine/pkg/environ"
 	"html/template"
 	"math"
 	"strings"
@@ -16,8 +16,8 @@ type templateContext struct {
 	Relative    string
 	RelativeRAW string
 	Progress    string
-	Start       *engine.CtxTime
-	End         *engine.CtxTime
+	Start       *environ.CtxTime
+	End         *environ.CtxTime
 	IsCurrent   bool
 }
 
@@ -78,13 +78,14 @@ func createTemplateContext(tpl string, ctx *FormatContext) *templateContext {
 	if strings.Contains(tpl, "Progress") {
 		progress = createProgressBar(ctx.event)
 	}
+	tStart, tEnd := environ.NewTime(*ctx.event.Start), environ.NewTime(*ctx.event.End)
 	return &templateContext{
 		Event:       ctx.event,
 		Relative:    relative,
 		RelativeRAW: relativeRaw,
 		Progress:    progress,
-		Start:       &engine.CtxTime{Time: ctx.event.Start},
-		End:         &engine.CtxTime{Time: ctx.event.End},
+		Start:       &tStart,
+		End:         &tEnd,
 		IsCurrent:   now.After(*ctx.event.Start) && now.Before(*ctx.event.End),
 	}
 }
